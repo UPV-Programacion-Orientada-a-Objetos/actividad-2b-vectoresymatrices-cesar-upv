@@ -1,2 +1,8 @@
 .vscode
 .vscode/*
+
+// excluir ejecutables
+main
+*.exe
+*.out
+a.out
