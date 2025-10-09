@@ -13,6 +13,7 @@ typedef struct { // estructura lote de producción
 LoteProduccion ***almacen; // almacén (matriz 2d)
 int filasAlmacen;
 int columnasAlmacen;
+int sizeAlmacen;
 
 LoteProduccion *maestroLotes; // maestro de lotes (vectores paralelos)
 int *indicesDisponibles;
@@ -21,7 +22,7 @@ int *pilaIDLote; // pila de inspecciones (stack)
 int *pilaResultado;
 
 /* ====================================
-        Funciones Runtime
+        Funciones Iniciales
 ==================================== */
 void inicializarAlmacen();
 
@@ -77,7 +78,7 @@ int main(int argc, char* argv[]) {
 }
 
 /* ====================================
-        Funciones Runtime
+        Funciones Iniciales
 ==================================== */
 void inicializarAlmacen() {
     // pedir dimensiones de la matriz
@@ -86,15 +87,25 @@ void inicializarAlmacen() {
 
     imprimirLog("STATUS", "Creando almacén inicial (de " + std::to_string(filasAlmacen) + " x " + std::to_string(columnasAlmacen) + ").");
 
+    sizeAlmacen = filasAlmacen * columnasAlmacen;
+
+    // llenar vectores paralelos
+    maestroLotes = new LoteProduccion[sizeAlmacen];
+    indicesDisponibles = new int[sizeAlmacen];
+    for (int i = 0; i < sizeAlmacen; i++) {
+        maestroLotes[i].idLote = -1; // id nula
+        indicesDisponibles[i] = i;
+    }
+
     // arreglo de filas
     almacen = new LoteProduccion**[filasAlmacen];
     for (int i = 0; i < filasAlmacen; i++) {
         // celdas de las columnas
         almacen[i] = new LoteProduccion*[columnasAlmacen];
 
-        // inicializar lotes en cada celda
+        // asignar cada celda como apuntador al maestro
         for (int j = 0; j < columnasAlmacen; j++) {
-            almacen[i][j] = new LoteProduccion();
+            almacen[i][j] = nullptr;
         }
     }
 
@@ -112,7 +123,7 @@ void colocarLote() {
         Funciones Auxiliares
 ==================================== */
 void cambiarColorCli(std::string color) {
-    int code;
+    int code = 0;
 
     if (color == "RED" || color == "red")       code = 31;
     if (color == "GREEN" || color == "green")   code = 32;
