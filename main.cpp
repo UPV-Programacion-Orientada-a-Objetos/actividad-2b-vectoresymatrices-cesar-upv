@@ -179,7 +179,7 @@ int preguntarInt(std::string msj, bool soloPositivos, bool sinLog) {
     } while (!esInt(userInput) || (soloPositivos && stoi(userInput) <= 0));
 
     if (sinLog) {
-        std::cout << "──➤ \n" << std::endl; 
+        std::cout << "──➤" << std::endl; 
     }
     return stoi(userInput);
 }
