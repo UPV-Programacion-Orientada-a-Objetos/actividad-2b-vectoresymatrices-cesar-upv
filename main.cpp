@@ -29,6 +29,8 @@ int *indicesDisponibles = nullptr;
 
 int *pilaIDLote = nullptr; // pila de inspecciones (stack)
 int *pilaResultado = nullptr;
+int capacidadPila = 10; // tamaño máximo de la pila
+int sizePila = 0;       // cantidad de elementos en la pila
 
 /* ====================================
         Funciones de Memoria
@@ -41,6 +43,10 @@ void redimensionarAlmacen(void);
         Funciones del Menú
 ==================================== */
 void colocarLote(void);
+void controlCalidad(void);
+void deshacerInspeccion(void);
+void reportePorFila(void);
+void busquedaPorComponente(void);
 
 /* ====================================
         Funciones Auxiliares
@@ -98,6 +104,26 @@ int main(int argc, char *argv[])
             colocarLote();
             break;
 
+        case 2:
+            imprimirLog("STATUS", "Opción seleccionada: 2 (Control de Calidad)\n");
+            controlCalidad();
+            break;
+
+        case 3:
+            imprimirLog("STATUS", "Opción seleccionada: 3 (Deshacer Inspección)\n");
+            deshacerInspeccion();
+            break;
+
+        case 4:
+            imprimirLog("STATUS", "Opción seleccionada: 4 (Reporte por Fila)\n");
+            reportePorFila();
+            break;
+
+        case 5:
+            imprimirLog("STATUS", "Opción seleccionada: 5 (Búsqueda por Componente)\n");
+            busquedaPorComponente();
+            break;
+
         case 0:
             liberarMemoria();
             imprimirLog("STATUS", "Saliendo del programa. \n");
@@ -139,6 +165,11 @@ void inicializarAlmacen()
         maestroLotes[i].cantidadTotal = 0;
         indicesDisponibles[i] = -1; // celda libre
     }
+
+    // inicializar pila dinámica de inspecciones (capacidad fija 10)
+    pilaIDLote = new int[capacidadPila];
+    pilaResultado = new int[capacidadPila];
+    sizePila = 0;
 
     // arreglo de filas
     almacen = new LoteProduccion **[filasAlmacen];
@@ -187,24 +218,27 @@ void liberarMemoria()
 }
 
 // * Duplicar capacidad del almacén y vectores paralelos
-void redimensionarAlmacen() {
+void redimensionarAlmacen()
+{
     imprimirLog("STATUS", "Redimensionando almacén...");
 
     int nuevasFilas = filasAlmacen * 2;
-    int nuevoSize   = sizeAlmacen * 2;
+    int nuevoSize = sizeAlmacen * 2;
 
     // crear nuevos vectores paralelos
-    LoteProduccion* nuevoMaestro = new LoteProduccion[nuevoSize];
-    int*            nuevosIndices = new int[nuevoSize];
+    LoteProduccion *nuevoMaestro = new LoteProduccion[nuevoSize];
+    int *nuevosIndices = new int[nuevoSize];
 
     // copiar datos existentes en los vectores paralelos
-    for (int i = 0; i < sizeAlmacen; ++i) {
-        nuevoMaestro[i]  = maestroLotes[i];
+    for (int i = 0; i < sizeAlmacen; ++i)
+    {
+        nuevoMaestro[i] = maestroLotes[i];
         nuevosIndices[i] = indicesDisponibles[i];
     }
 
-    // terminar de inicializar los nuevos campos 
-    for (int i = sizeAlmacen; i < nuevoSize; ++i) {
+    // terminar de inicializar los nuevos campos
+    for (int i = sizeAlmacen; i < nuevoSize; ++i)
+    {
         nuevoMaestro[i].idLote = -1;
         nuevoMaestro[i].nombreComponente[0] = '\0';
         nuevoMaestro[i].pesoUnitario = 0.0f;
@@ -213,43 +247,59 @@ void redimensionarAlmacen() {
     }
 
     // crear nueva matriz duplicando solamente el número de filas
-    LoteProduccion*** nuevoAlmacen = new LoteProduccion**[nuevasFilas];
-    for (int i = 0; i < nuevasFilas; ++i) {
-        nuevoAlmacen[i] = new LoteProduccion*[columnasAlmacen];
+    LoteProduccion ***nuevoAlmacen = new LoteProduccion **[nuevasFilas];
+    for (int i = 0; i < nuevasFilas; ++i)
+    {
+        nuevoAlmacen[i] = new LoteProduccion *[columnasAlmacen];
+    }
+
+    // inicializar toda la matriz nueva en nullptr
+    for (int i = 0; i < nuevasFilas; ++i)
+    {
+        for (int j = 0; j < columnasAlmacen; ++j)
+        {
+            nuevoAlmacen[i][j] = nullptr;
+        }
     }
 
     // asignar celdas existentes, validando con el maestro
-    for (int i = 0; i < filasAlmacen; ++i) {
-        for (int j = 0; j < columnasAlmacen; ++j) {
-            if (almacen[i][j] == nullptr) {
+    for (int i = 0; i < filasAlmacen; ++i)
+    {
+        for (int j = 0; j < columnasAlmacen; ++j)
+        {
+            if (almacen[i][j] == nullptr)
+            {
                 nuevoAlmacen[i][j] = nullptr;
-            } else {
+            }
+            else
+            {
                 // recorrer el maestro y la matriz vieja y ver si hay un lote comparando punteros
                 int kEncontrado = -1;
-                for (int k = 0; k < sizeAlmacen; ++k) {
-                    if (&maestroLotes[k] == almacen[i][j]) {
+                for (int k = 0; k < sizeAlmacen; ++k)
+                {
+                    if (&maestroLotes[k] == almacen[i][j])
+                    {
                         kEncontrado = k;
                         break;
                     }
                 }
 
                 // reflejar ese mismo indice en los nuevos vectores
-                if (kEncontrado >= 0) {
+                if (kEncontrado >= 0)
+                {
                     nuevoAlmacen[i][j] = &nuevoMaestro[kEncontrado];
+                }
+                else
+                {
+                    nuevoAlmacen[i][j] = nullptr;
                 }
             }
         }
     }
-    
-    // las nuevas filas inician en null
-    for (int i = filasAlmacen; i < nuevasFilas; ++i) {
-        for (int j = 0; j < columnasAlmacen; ++j) {
-            nuevoAlmacen[i][j] = nullptr;
-        }
-    }
 
     // liberar memoria de las filas viejas
-    for (int i = 0; i < filasAlmacen; ++i) {
+    for (int i = 0; i < filasAlmacen; ++i)
+    {
         delete[] almacen[i];
     }
     delete[] almacen;
@@ -262,7 +312,7 @@ void redimensionarAlmacen() {
     indicesDisponibles = nuevosIndices;
 
     filasAlmacen = nuevasFilas;
-    sizeAlmacen  = nuevoSize;
+    sizeAlmacen = nuevoSize;
 
     imprimirLog("SUCCESS", "Capacidad duplicada con éxito. (" + std::to_string(sizeAlmacen) + " celdas)");
 }
@@ -283,11 +333,123 @@ void colocarLote(void)
     registrarLote(posFila, posColumna);
 }
 
+void controlCalidad()
+{
+    int idInspeccion;
+    obtenerNumeroPositivo("ID de Lote a inspeccionar", idInspeccion);
+
+    if (!contieneDato(indicesDisponibles, idInspeccion, sizeAlmacen))
+    {
+        imprimirLog("WARNING", "El ID ingresado no existe en el maestro de lotes.");
+        return;
+    }
+
+    int resultado;
+    obtenerNumeroEnRango("Resultado (1 = Aprobado, 0 = Rechazado)", resultado, 0, 1);
+
+    // si la pila está llena, eliminar el elemento más antiguo
+    if (sizePila == capacidadPila)
+    {
+        imprimirLog("STATUS", "Pila llena. Eliminando el elemento más antiguo.");
+        for (int i = 1; i < capacidadPila; ++i)
+        {
+            pilaIDLote[i - 1] = pilaIDLote[i];
+            pilaResultado[i - 1] = pilaResultado[i];
+        }
+        sizePila -= 1; // espacio al final
+    }
+
+    // push al final
+    pilaIDLote[sizePila] = idInspeccion;
+    pilaResultado[sizePila] = resultado;
+    sizePila += 1;
+
+    std::string texto = (resultado == 1) ? "Aprobado (1)" : "Rechazado (0)";
+    imprimirLog("SUCCESS", "Evento PUSH a Pila: Lote " + std::to_string(idInspeccion) + " | Resultado " + texto + ".");
+}
+
+void deshacerInspeccion()
+{
+    if (sizePila <= 0)
+    {
+        imprimirLog("WARNING", "La pila de inspecciones está vacía.");
+        return;
+    }
+
+    // elemento en el tope
+    int idx = sizePila - 1;
+    int id = pilaIDLote[idx];
+    int res = pilaResultado[idx];
+    sizePila -= 1;
+
+    std::string texto = (res == 1) ? "Aprobado (1)" : "Rechazado (0)";
+    imprimirLog("STATUS", "POP de Pila: Evento Lote " + std::to_string(id) + " | Resultado " + texto + ".");
+    imprimirLog("SUCCESS", "Historial de inspección revertido (solo se deshizo el registro del evento).");
+}
+
+void reportePorFila()
+{
+    int filaInput;
+    obtenerNumeroEnRango("Posición - número de fila", filaInput, 1, filasAlmacen);
+
+    int fila = filaInput - 1;
+    std::cout << "--- Reporte de Fila " << fila << " ---" << std::endl;
+
+    for (int col = 0; col < columnasAlmacen; ++col)
+    {
+        LoteProduccion *p = almacen[fila][col];
+
+        std::cout << "(" << fila << ", " << col << "): ";
+        if (p != nullptr)
+        {
+            std::cout << "ID: " << p->idLote << ", Nombre: " << p->nombreComponente << std::endl;
+        }
+        else
+        {
+            std::cout << "Vacío" << std::endl;
+        }
+    }
+}
+
+void busquedaPorComponente(void)
+{
+    std::string nombre;
+    obtenerDato("Nombre del componente a buscar", nombre);
+
+    imprimirLog("STATUS", "Buscando componente '" + nombre + "' en el almacén...");
+
+    int encontrados = 0;
+    for (int i = 0; i < filasAlmacen; ++i)
+    {
+        for (int j = 0; j < columnasAlmacen; ++j)
+        {
+            LoteProduccion *p = almacen[i][j];
+            if (p != nullptr)
+            {
+                if (std::string(p->nombreComponente) == nombre)
+                {
+                    std::cout << "(" << i << ", " << j << "): Cantidad: " << p->cantidadTotal << std::endl;
+                    ++encontrados;
+                }
+            }
+        }
+    }
+
+    if (encontrados == 0)
+    {
+        imprimirLog("WARNING", "No se encontraron lotes con el componente especificado.");
+    }
+    else
+    {
+        imprimirLog("SUCCESS", "Se encontraron " + std::to_string(encontrados) + " coincidencia(s).");
+    }
+}
+
 /* ====================================
         Funciones Auxiliares
 ==================================== */
 // * Buscar y encontrar el primer índice disponible
-int buscarCeldaDisponible(void)
+int buscarCeldaDisponible()
 {
     imprimirLog("STATUS", "Buscando una celda disponible.");
     for (int i = 0; i < sizeAlmacen; i++)
@@ -344,11 +506,13 @@ void registrarLote(int posFila, int posColumna)
     }
 
     int celda = buscarCeldaDisponible();
-    if (celda == -1) {
+    if (celda == -1)
+    {
         imprimirLog("STATUS", "No hay espacio. Duplicando capacidad...");
         redimensionarAlmacen();
         celda = buscarCeldaDisponible();
-        if (celda == -1) {
+        if (celda == -1)
+        {
             imprimirLog("ERROR", "No fue posible obtener una celda libre tras redimensionar.");
             return;
         }
@@ -405,7 +569,7 @@ template <typename T>
 void obtenerNumeroPositivo(std::string mensaje, T &valor)
 {
     obtenerDato(mensaje, valor);
-    
+
     while (valor <= 0)
     {
         imprimirLog("WARNING", "Este número tiene que ser positivo, por favor, intente de nuevo.");
