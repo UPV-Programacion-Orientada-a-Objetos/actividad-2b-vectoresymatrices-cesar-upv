@@ -35,6 +35,7 @@ int *pilaResultado = nullptr;
 ==================================== */
 void inicializarAlmacen(void);
 void liberarMemoria(void);
+void redimensionarAlmacen(void);
 
 /* ====================================
         Funciones del Menú
@@ -66,6 +67,7 @@ void cambiarColorCli(std::string color);
 void imprimirLog(std::string tipo, std::string msj);
 
 // ? ==== INICIO MAIN ===================================================
+
 int main(int argc, char *argv[])
 {
     std::cout << std::fixed;
@@ -109,6 +111,7 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
 // ? ==== FIN MAIN ===================================================
 
 /* ====================================
@@ -183,6 +186,87 @@ void liberarMemoria()
     imprimirLog("SUCCESS", "Memoria liberada con éxito.");
 }
 
+// * Duplicar capacidad del almacén y vectores paralelos
+void redimensionarAlmacen() {
+    imprimirLog("STATUS", "Redimensionando almacén...");
+
+    int nuevasFilas = filasAlmacen * 2;
+    int nuevoSize   = sizeAlmacen * 2;
+
+    // crear nuevos vectores paralelos
+    LoteProduccion* nuevoMaestro = new LoteProduccion[nuevoSize];
+    int*            nuevosIndices = new int[nuevoSize];
+
+    // copiar datos existentes en los vectores paralelos
+    for (int i = 0; i < sizeAlmacen; ++i) {
+        nuevoMaestro[i]  = maestroLotes[i];
+        nuevosIndices[i] = indicesDisponibles[i];
+    }
+
+    // terminar de inicializar los nuevos campos 
+    for (int i = sizeAlmacen; i < nuevoSize; ++i) {
+        nuevoMaestro[i].idLote = -1;
+        nuevoMaestro[i].nombreComponente[0] = '\0';
+        nuevoMaestro[i].pesoUnitario = 0.0f;
+        nuevoMaestro[i].cantidadTotal = 0;
+        nuevosIndices[i] = -1;
+    }
+
+    // crear nueva matriz duplicando solamente el número de filas
+    LoteProduccion*** nuevoAlmacen = new LoteProduccion**[nuevasFilas];
+    for (int i = 0; i < nuevasFilas; ++i) {
+        nuevoAlmacen[i] = new LoteProduccion*[columnasAlmacen];
+    }
+
+    // asignar celdas existentes, validando con el maestro
+    for (int i = 0; i < filasAlmacen; ++i) {
+        for (int j = 0; j < columnasAlmacen; ++j) {
+            if (almacen[i][j] == nullptr) {
+                nuevoAlmacen[i][j] = nullptr;
+            } else {
+                // recorrer el maestro y la matriz vieja y ver si hay un lote comparando punteros
+                int kEncontrado = -1;
+                for (int k = 0; k < sizeAlmacen; ++k) {
+                    if (&maestroLotes[k] == almacen[i][j]) {
+                        kEncontrado = k;
+                        break;
+                    }
+                }
+
+                // reflejar ese mismo indice en los nuevos vectores
+                if (kEncontrado >= 0) {
+                    nuevoAlmacen[i][j] = &nuevoMaestro[kEncontrado];
+                }
+            }
+        }
+    }
+    
+    // las nuevas filas inician en null
+    for (int i = filasAlmacen; i < nuevasFilas; ++i) {
+        for (int j = 0; j < columnasAlmacen; ++j) {
+            nuevoAlmacen[i][j] = nullptr;
+        }
+    }
+
+    // liberar memoria de las filas viejas
+    for (int i = 0; i < filasAlmacen; ++i) {
+        delete[] almacen[i];
+    }
+    delete[] almacen;
+    delete[] maestroLotes;
+    delete[] indicesDisponibles;
+
+    // asignar nuevos punteros y tamaños
+    almacen = nuevoAlmacen;
+    maestroLotes = nuevoMaestro;
+    indicesDisponibles = nuevosIndices;
+
+    filasAlmacen = nuevasFilas;
+    sizeAlmacen  = nuevoSize;
+
+    imprimirLog("SUCCESS", "Capacidad duplicada con éxito. (" + std::to_string(sizeAlmacen) + " celdas)");
+}
+
 /* ====================================
         Funciones del Menú
 ==================================== */
@@ -223,10 +307,15 @@ LoteProduccion capturarDatosLote()
     LoteProduccion lote{};
 
     int idLote;
-    do
+    while (true)
     {
         obtenerNumeroPositivo("ID del nuevo lote", idLote);
-    } while (contieneDato(indicesDisponibles, idLote, sizeAlmacen));
+        if (!contieneDato(indicesDisponibles, idLote, sizeAlmacen))
+            break;
+
+        imprimirLog("WARNING", "El ID ya existe en el almacén. Por favor, ingrese otro ID.");
+        std::cout << std::endl;
+    }
 
     int cantidadTotal;
     obtenerNumeroPositivo("Cantidad total disponible", cantidadTotal);
@@ -254,16 +343,20 @@ void registrarLote(int posFila, int posColumna)
         return;
     }
 
+    int celda = buscarCeldaDisponible();
+    if (celda == -1) {
+        imprimirLog("STATUS", "No hay espacio. Duplicando capacidad...");
+        redimensionarAlmacen();
+        celda = buscarCeldaDisponible();
+        if (celda == -1) {
+            imprimirLog("ERROR", "No fue posible obtener una celda libre tras redimensionar.");
+            return;
+        }
+    }
+
     if (almacen[posFila][posColumna] != nullptr)
     {
         imprimirLog("WARNING", "Esta posición ya está ocupada por: " + std::string(almacen[posFila][posColumna]->nombreComponente));
-        return;
-    }
-
-    int celda = buscarCeldaDisponible();
-    if (celda == -1)
-    {
-        imprimirLog("WARNING", "No hay celdas disponibles.");
         return;
     }
 
@@ -275,7 +368,7 @@ void registrarLote(int posFila, int posColumna)
     indicesDisponibles[celda] = nuevoLote.idLote;
     almacen[posFila][posColumna] = &maestroLotes[celda];
 
-    imprimirLog("SUCCESS", "Se ha capturado el nuevo lote " + std::string(nuevoLote.nombreComponente) + ".");
+    imprimirLog("SUCCESS", "Se ha capturado el nuevo lote '" + std::string(nuevoLote.nombreComponente) + "'.");
 }
 
 // * Sobrecarga de obtención de datos para obtener strings
