@@ -37,11 +37,12 @@ int sizePila = 0;       // cantidad de elementos en la pila
 ==================================== */
 void inicializarAlmacen(void);
 void liberarMemoria(void);
-void redimensionarAlmacen(void);
+void asignarNuevaMemoria(int nuevasFilas, int nuevasColumnas);
 
 /* ====================================
         Funciones del Menú
 ==================================== */
+void redimensionarAlmacen(void);
 void colocarLote(void);
 void controlCalidad(void);
 void deshacerInspeccion(void);
@@ -87,12 +88,13 @@ int main(int argc, char *argv[])
     {
         std::cout << "\nAlphaTech - Electrónicos" << std::endl;
         std::cout << "─ Menú ─────────────────────────────────" << std::endl;
-        std::cout << "1. Colocar Lote                       " << std::endl;
-        std::cout << "2. Control de Calidad                 " << std::endl;
-        std::cout << "3. Deshacer Inspección                " << std::endl;
-        std::cout << "4. Reporte por Fila                   " << std::endl;
-        std::cout << "5. Busqueda por Componente            " << std::endl;
-        std::cout << "0. Salir                              " << std::endl;
+        std::cout << "1. Redimensionar Almacén                " << std::endl;
+        std::cout << "2. Colocar Lote                         " << std::endl;
+        std::cout << "3. Control de Calidad                   " << std::endl;
+        std::cout << "4. Deshacer Inspección                  " << std::endl;
+        std::cout << "5. Reporte por Fila                     " << std::endl;
+        std::cout << "6. Busqueda por Componente              " << std::endl;
+        std::cout << "0. Salir                                " << std::endl;
         std::cout << "────────────────────────────────── · · ·" << std::endl;
 
         obtenerDato("Ingrese opción", opcionMenu);
@@ -100,27 +102,32 @@ int main(int argc, char *argv[])
         switch (opcionMenu)
         {
         case 1:
-            imprimirLog("STATUS", "Opción seleccionada: 1 (Colocar Lote)\n");
-            colocarLote();
+            imprimirLog("STATUS", "Opción seleccionada: 1 (Redimensionar Almacén)\n");
+            redimensionarAlmacen();
             break;
 
         case 2:
-            imprimirLog("STATUS", "Opción seleccionada: 2 (Control de Calidad)\n");
-            controlCalidad();
+            imprimirLog("STATUS", "Opción seleccionada: 2 (Colocar Lote)\n");
+            colocarLote();
             break;
 
         case 3:
-            imprimirLog("STATUS", "Opción seleccionada: 3 (Deshacer Inspección)\n");
-            deshacerInspeccion();
+            imprimirLog("STATUS", "Opción seleccionada: 3 (Control de Calidad)\n");
+            controlCalidad();
             break;
 
         case 4:
-            imprimirLog("STATUS", "Opción seleccionada: 4 (Reporte por Fila)\n");
-            reportePorFila();
+            imprimirLog("STATUS", "Opción seleccionada: 4 (Deshacer Inspección)\n");
+            deshacerInspeccion();
             break;
 
         case 5:
-            imprimirLog("STATUS", "Opción seleccionada: 5 (Búsqueda por Componente)\n");
+            imprimirLog("STATUS", "Opción seleccionada: 5 (Reporte por Fila)\n");
+            reportePorFila();
+            break;
+
+        case 6:
+            imprimirLog("STATUS", "Opción seleccionada: 6 (Búsqueda por Componente)\n");
             busquedaPorComponente();
             break;
 
@@ -217,13 +224,19 @@ void liberarMemoria()
     imprimirLog("SUCCESS", "Memoria liberada con éxito.");
 }
 
-// * Duplicar capacidad del almacén y vectores paralelos
-void redimensionarAlmacen()
+// * Redimensionar la capacidad del almacén y vectores paralelos (con dadas dimensiones)
+void asignarNuevaMemoria(int nuevasFilas, int nuevasColumnas)
 {
     imprimirLog("STATUS", "Redimensionando almacén...");
 
-    int nuevasFilas = filasAlmacen * 2;
-    int nuevoSize = sizeAlmacen * 2;
+    // no permitir reducir dimensiones
+    if (nuevasFilas < filasAlmacen || nuevasColumnas < columnasAlmacen)
+    {
+        imprimirLog("WARNING", "No se permite reducir filas o columnas. Operación cancelada.");
+        return;
+    }
+
+    int nuevoSize = nuevasFilas * nuevasColumnas;
 
     // crear nuevos vectores paralelos
     LoteProduccion *nuevoMaestro = new LoteProduccion[nuevoSize];
@@ -246,17 +259,17 @@ void redimensionarAlmacen()
         nuevosIndices[i] = -1;
     }
 
-    // crear nueva matriz duplicando solamente el número de filas
+    // crear nueva matriz con las dimensiones asignadas
     LoteProduccion ***nuevoAlmacen = new LoteProduccion **[nuevasFilas];
     for (int i = 0; i < nuevasFilas; ++i)
     {
-        nuevoAlmacen[i] = new LoteProduccion *[columnasAlmacen];
+        nuevoAlmacen[i] = new LoteProduccion *[nuevasColumnas];
     }
 
     // inicializar toda la matriz nueva en nullptr
     for (int i = 0; i < nuevasFilas; ++i)
     {
-        for (int j = 0; j < columnasAlmacen; ++j)
+        for (int j = 0; j < nuevasColumnas; ++j)
         {
             nuevoAlmacen[i][j] = nullptr;
         }
@@ -312,14 +325,32 @@ void redimensionarAlmacen()
     indicesDisponibles = nuevosIndices;
 
     filasAlmacen = nuevasFilas;
+    columnasAlmacen = nuevasColumnas;
     sizeAlmacen = nuevoSize;
 
-    imprimirLog("SUCCESS", "Capacidad duplicada con éxito. (" + std::to_string(sizeAlmacen) + " celdas)");
+    imprimirLog("SUCCESS", "Redimensionamiento exitoso. (" + std::to_string(sizeAlmacen) + " celdas)");
 }
 
 /* ====================================
         Funciones del Menú
 ==================================== */
+void redimensionarAlmacen()
+{
+    int nuevasFilas;
+    obtenerNumeroEnRango("Nuevo número de filas", nuevasFilas, filasAlmacen, 100);
+
+    int nuevasColumnas;
+    obtenerNumeroEnRango("Nuevo número de columnas", nuevasColumnas, columnasAlmacen, 100);
+
+    if (nuevasFilas < filasAlmacen || nuevasColumnas < columnasAlmacen)
+    {
+        imprimirLog("WARNING", "No se permiten nuevas filas/columnas menores a las actuales.");
+        return;
+    }
+
+    asignarNuevaMemoria(nuevasFilas, nuevasColumnas);
+}
+
 void colocarLote(void)
 {
     int posFila;
@@ -393,13 +424,13 @@ void reportePorFila()
     obtenerNumeroEnRango("Posición - número de fila", filaInput, 1, filasAlmacen);
 
     int fila = filaInput - 1;
-    std::cout << "--- Reporte de Fila " << fila << " ---" << std::endl;
+    std::cout << "--- Reporte de Fila " << filaInput << " ---" << std::endl;
 
     for (int col = 0; col < columnasAlmacen; ++col)
     {
         LoteProduccion *p = almacen[fila][col];
 
-        std::cout << "(" << fila << ", " << col << "): ";
+        std::cout << "(" << filaInput << ", " << col << "): ";
         if (p != nullptr)
         {
             std::cout << "ID: " << p->idLote << ", Nombre: " << p->nombreComponente << std::endl;
@@ -509,7 +540,7 @@ void registrarLote(int posFila, int posColumna)
     if (celda == -1)
     {
         imprimirLog("STATUS", "No hay espacio. Duplicando capacidad...");
-        redimensionarAlmacen();
+        asignarNuevaMemoria(filasAlmacen * 2, columnasAlmacen);
         celda = buscarCeldaDisponible();
         if (celda == -1)
         {
